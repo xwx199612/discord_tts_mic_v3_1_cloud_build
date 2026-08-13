@@ -1,4 +1,4 @@
-name: Build Discord TTS Virtual Audio
+name: Build Discord TTS VB-CABLE Edition
 
 on:
   workflow_dispatch:
@@ -6,11 +6,10 @@ on:
     paths:
       - '.github/workflows/build-driver.yml'
       - 'src/**'
-      - 'cloud/**'
 
 jobs:
   build-app:
-    name: Build portable app
+    name: Build discord_tts.exe
     runs-on: windows-2025
     timeout-minutes: 20
     steps:
@@ -30,44 +29,16 @@ jobs:
         shell: cmd
         run: dotnet publish "src\App\DiscordTtsMic.App.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o "artifacts\app"
 
-      - name: Rename executable
+      - name: Verify executable
         shell: cmd
         run: |
-          if exist "artifacts\app\DiscordTtsMic.exe" move /y "artifacts\app\DiscordTtsMic.exe" "artifacts\app\discord_tts.exe"
+          if not exist "artifacts\app\discord_tts.exe" exit /b 1
           dir artifacts\app
 
       - name: Upload app
         uses: actions/upload-artifact@v4
         with:
-          name: discord_tts-win-x64
-          path: artifacts/app/
+          name: discord_tts-vbcable-win-x64
+          path: artifacts/app/discord_tts.exe
           if-no-files-found: error
           retention-days: 14
-
-  sysvad-baseline:
-    name: SysVAD baseline diagnostic
-    runs-on: windows-2025
-    timeout-minutes: 30
-    continue-on-error: true
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v6
-
-      - name: Fetch SysVAD only
-        shell: cmd
-        run: |
-          git -c core.autocrlf=false clone --depth 1 --filter=blob:none --no-checkout https://github.com/microsoft/Windows-driver-samples.git external\Windows-driver-samples
-          cd external\Windows-driver-samples
-          git sparse-checkout init --cone
-          git sparse-checkout set audio/sysvad
-          git -c core.autocrlf=false checkout
-          git submodule update --init --recursive
-
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v3
-        with:
-          msbuild-architecture: x64
-
-      - name: Build SysVAD baseline
-        shell: cmd
-        run: msbuild "external\Windows-driver-samples\audio\sysvad\sysvad.sln" /m /t:Build /p:Configuration=Release /p:Platform=x64 /v:minimal
