@@ -16,18 +16,20 @@ jobs:
 
     steps:
       - name: Checkout Discord TTS source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Checkout Microsoft Windows driver samples
-        uses: actions/checkout@v4
-        with:
-          repository: microsoft/Windows-driver-samples
-          path: external/Windows-driver-samples
-          submodules: recursive
-          fetch-depth: 1
+      - name: Fetch Microsoft SysVAD
+        shell: cmd
+        run: |
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/microsoft/Windows-driver-samples.git external\Windows-driver-samples
+          cd external\Windows-driver-samples
+          git sparse-checkout set audio/sysvad
+          git submodule update --init --recursive
 
       - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
+        uses: microsoft/setup-msbuild@v3
+        with:
+          msbuild-architecture: x64
 
       - name: Print toolchain versions
         shell: cmd
@@ -39,12 +41,12 @@ jobs:
           echo ==== Installed Windows Kits ====
           dir "C:\Program Files (x86)\Windows Kits\10\bin" /b
 
-      - name: Build Microsoft SysVAD baseline (Release x64)
+      - name: Build Microsoft SysVAD baseline
         shell: cmd
         run: |
           msbuild "external\Windows-driver-samples\audio\sysvad\sysvad.sln" /m /t:Build /p:Configuration=Release /p:Platform=x64 /v:minimal
 
-      - name: Collect SysVAD baseline outputs
+      - name: Collect SysVAD outputs
         shell: cmd
         run: |
           if not exist artifacts\sysvad-baseline mkdir artifacts\sysvad-baseline
@@ -57,36 +59,16 @@ jobs:
           dotnet restore "src\App\DiscordTtsMic.App.csproj"
           dotnet publish "src\App\DiscordTtsMic.App.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o "artifacts\app"
 
-      - name: Write build manifest
-        shell: cmd
-        run: |
-          echo Discord TTS Microphone v3.1 Cloud Build> artifacts\BUILD_INFO.txt
-          echo Runner: windows-2025>> artifacts\BUILD_INFO.txt
-          echo SysVAD: Microsoft Windows-driver-samples main branch>> artifacts\BUILD_INFO.txt
-          echo App: self-contained win-x64>> artifacts\BUILD_INFO.txt
-          echo.>> artifacts\BUILD_INFO.txt
-          echo NOTE: sysvad-baseline is the unmodified Microsoft baseline driver.>> artifacts\BUILD_INFO.txt
-          echo It is intentionally NOT yet the final Discord TTS Virtual Microphone driver.>> artifacts\BUILD_INFO.txt
-
-      - name: Upload SysVAD baseline artifact
+      - name: Upload SysVAD baseline
         uses: actions/upload-artifact@v4
         with:
           name: sysvad-baseline-x64
           path: artifacts/sysvad-baseline/
           if-no-files-found: error
-          retention-days: 14
 
-      - name: Upload portable app artifact
+      - name: Upload portable app
         uses: actions/upload-artifact@v4
         with:
           name: DiscordTtsMic-app-win-x64
           path: artifacts/app/
           if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload build info
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-info
-          path: artifacts/BUILD_INFO.txt
-          retention-days: 14
