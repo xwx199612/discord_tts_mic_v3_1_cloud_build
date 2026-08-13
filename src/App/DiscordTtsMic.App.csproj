@@ -5,9 +5,9 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>DiscordTtsMic</AssemblyName>
+    <AssemblyName>discord_tts</AssemblyName>
     <RootNamespace>DiscordTtsMic</RootNamespace>
-    <Version>3.1.0-alpha</Version>
+    <Version>3.2.0</Version>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
