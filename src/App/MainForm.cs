@@ -8,7 +8,12 @@ namespace DiscordTtsMic;
 
 public sealed class MainForm : Form
 {
-    private readonly ComboBox _voice = new() { Width = 330, DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox _engine = new() { Width = 180, DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox _voice = new() { Width = 300, DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly Button _loadPack = new() { Text = "Load voice pack…", AutoSize = true };
+    private readonly Label _packName = new() { AutoSize = true, Text = "No custom voice pack loaded" };
+    private readonly NumericUpDown _speaker = new() { Minimum = 0, Maximum = 9999, Value = 0, Width = 80 };
+    private readonly NumericUpDown _speed = new() { Minimum = 25, Maximum = 400, Value = 100, Increment = 5, Width = 80 };
     private readonly ComboBox _mic = new() { Width = 420, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox _output = new() { Width = 420, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly TextBox _text = new() { Multiline = true, Dock = DockStyle.Fill, Font = new Font("Segoe UI", 14), ScrollBars = ScrollBars.Vertical, MaxLength = 200000 };
@@ -22,22 +27,25 @@ public sealed class MainForm : Form
     private readonly Button _restartAudio = new() { Text = "Restart audio", AutoSize = true };
 
     private readonly AudioMixerEngine _audio = new();
+    private readonly VoicePackTts _voicePack = new();
     private bool _speaking;
 
     public MainForm()
     {
-        Text = "Discord TTS — VB-CABLE Edition (Long Text)";
-        Width = 920;
-        Height = 650;
+        Text = "Discord TTS — VB-CABLE Edition (Custom Voice Packs)";
+        Width = 980;
+        Height = 720;
         StartPosition = FormStartPosition.CenterScreen;
         Controls.Add(BuildUi());
 
         Load += (_, _) => InitializeAll();
-        FormClosed += (_, _) => _audio.Dispose();
+        FormClosed += (_, _) => { _audio.Dispose(); _voicePack.Dispose(); };
         _speak.Click += async (_, _) => await SpeakAsync();
+        _loadPack.Click += (_, _) => LoadVoicePack();
         _restartAudio.Click += (_, _) => RestartAudio();
         _mic.SelectedIndexChanged += (_, _) => RestartAudio();
         _output.SelectedIndexChanged += (_, _) => RestartAudio();
+        _engine.SelectedIndexChanged += (_, _) => UpdateVoiceControls();
         _micVol.Scroll += (_, _) => ApplyLevels();
         _ttsVol.Scroll += (_, _) => ApplyLevels();
         _passMic.CheckedChanged += (_, _) => ApplyLevels();
@@ -54,21 +62,25 @@ public sealed class MainForm : Form
 
     private Control BuildUi()
     {
-        var t = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 1, RowCount = 9 };
-        for (int i = 0; i < 6; i++) t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        var t = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 1, RowCount = 12 };
+        for (int i = 0; i < 9; i++) t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         t.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        t.Controls.Add(Row("Voice", _voice), 0, 0);
-        t.Controls.Add(Row("Physical mic", _mic), 0, 1);
-        t.Controls.Add(Row("VB-CABLE out", _output, _restartAudio), 0, 2);
-        t.Controls.Add(Row("Mic gain", _micVol, _passMic), 0, 3);
-        t.Controls.Add(Row("TTS gain", _ttsVol, _duck), 0, 4);
-        t.Controls.Add(_route, 0, 5);
-        t.Controls.Add(_text, 0, 6);
-        t.Controls.Add(Row("", _speak), 0, 7);
-        t.Controls.Add(_status, 0, 8);
+        t.Controls.Add(Row("TTS engine", _engine), 0, 0);
+        t.Controls.Add(Row("Windows voice", _voice), 0, 1);
+        t.Controls.Add(Row("Voice pack", _loadPack, _packName), 0, 2);
+        t.Controls.Add(Row("Pack options", new Label { Text = "Speaker ID", AutoSize = true, Margin = new Padding(3, 8, 3, 3) }, _speaker,
+            new Label { Text = "Speed %", AutoSize = true, Margin = new Padding(15, 8, 3, 3) }, _speed), 0, 3);
+        t.Controls.Add(Row("Physical mic", _mic), 0, 4);
+        t.Controls.Add(Row("VB-CABLE out", _output, _restartAudio), 0, 5);
+        t.Controls.Add(Row("Mic gain", _micVol, _passMic), 0, 6);
+        t.Controls.Add(Row("TTS gain", _ttsVol, _duck), 0, 7);
+        t.Controls.Add(_route, 0, 8);
+        t.Controls.Add(_text, 0, 9);
+        t.Controls.Add(Row("", _speak), 0, 10);
+        t.Controls.Add(_status, 0, 11);
         return t;
     }
 
@@ -83,6 +95,10 @@ public sealed class MainForm : Form
 
     private void InitializeAll()
     {
+        _engine.Items.Add("Windows / SAPI");
+        _engine.Items.Add("Custom voice pack");
+        _engine.SelectedIndex = 0;
+
         using (var synth = new SpeechSynthesizer())
         {
             foreach (var v in synth.GetInstalledVoices().Where(v => v.Enabled))
@@ -118,7 +134,52 @@ public sealed class MainForm : Form
             if (_output.Items.Count > 0) _output.SelectedIndex = 0;
             _status.Text = "VB-CABLE not detected. Install VB-CABLE and select CABLE Input.";
         }
+
+        UpdateVoiceControls();
         RestartAudio();
+    }
+
+    private void UpdateVoiceControls()
+    {
+        bool custom = _engine.SelectedIndex == 1;
+        _voice.Enabled = !custom;
+        _loadPack.Enabled = custom;
+        _speaker.Enabled = custom;
+        _speed.Enabled = custom;
+    }
+
+    private void LoadVoicePack()
+    {
+        using var dialog = new FolderBrowserDialog
+        {
+            Description = "Select a sherpa-onnx VITS voice-pack folder (model.onnx + tokens.txt, optionally voicepack.json)",
+            UseDescriptionForTitle = true,
+            ShowNewFolderButton = false
+        };
+
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        try
+        {
+            Cursor = Cursors.WaitCursor;
+            _status.Text = "Loading custom voice pack…";
+            Application.DoEvents();
+            _voicePack.Load(dialog.SelectedPath);
+            _speaker.Value = Math.Min(_speaker.Maximum, Math.Max(_speaker.Minimum, _voicePack.SpeakerId));
+            _speed.Value = Math.Min(_speed.Maximum, Math.Max(_speed.Minimum, (decimal)(_voicePack.Speed * 100f)));
+            _packName.Text = $"{_voicePack.DisplayName}  ({dialog.SelectedPath})";
+            _engine.SelectedIndex = 1;
+            _status.Text = "Custom voice pack loaded. Ready.";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Voice pack load error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            _status.Text = "Voice pack load failed.";
+        }
+        finally
+        {
+            Cursor = Cursors.Default;
+        }
     }
 
     private void RestartAudio()
@@ -144,22 +205,38 @@ public sealed class MainForm : Form
         var text = _text.Text.Trim();
         if (text.Length == 0 || _speaking) return;
 
+        bool custom = _engine.SelectedIndex == 1;
+        if (custom && !_voicePack.IsLoaded)
+        {
+            MessageBox.Show(this, "Load a custom voice pack first.", "No voice pack");
+            return;
+        }
+
         _speaking = true;
         _speak.Enabled = false;
+        _loadPack.Enabled = false;
         try
         {
-            var chunks = SplitForSpeech(text, 350);
+            var chunks = SplitForSpeech(text, custom ? 180 : 350);
             string? voiceName = _voice.SelectedItem as string;
             int done = 0;
 
+            if (custom)
+            {
+                _voicePack.SpeakerId = (int)_speaker.Value;
+                _voicePack.Speed = (float)_speed.Value / 100f;
+            }
+
             foreach (var chunk in chunks)
             {
-                byte[] pcmBytes = await Task.Run(() => SynthesizeChunk(chunk, voiceName));
+                byte[] pcmBytes = await Task.Run(() => custom
+                    ? _voicePack.SynthesizePcm48kMono16(chunk)
+                    : SynthesizeWindowsChunk(chunk, voiceName));
+
                 _audio.QueueTtsPcm16(pcmBytes);
                 done++;
-                _status.Text = $"Speaking through VB-CABLE… prepared {done}/{chunks.Count}, queued {_audio.PendingTtsDuration.TotalSeconds:F1}s";
+                _status.Text = $"Speaking… prepared {done}/{chunks.Count}, queued {_audio.PendingTtsDuration.TotalSeconds:F1}s";
 
-                // Keep memory bounded for very large input: do not synthesize minutes of audio ahead.
                 while (_audio.PendingTtsDuration > TimeSpan.FromSeconds(20))
                     await Task.Delay(100);
             }
@@ -167,27 +244,27 @@ public sealed class MainForm : Form
             _text.Clear();
             while (_audio.HasPendingTts)
             {
-                _status.Text = $"Speaking through VB-CABLE… remaining {_audio.PendingTtsDuration.TotalSeconds:F1}s";
+                _status.Text = $"Speaking… remaining {_audio.PendingTtsDuration.TotalSeconds:F1}s";
                 await Task.Delay(100);
             }
 
-            // Small tail allowance for the WASAPI/VB-CABLE output buffer.
             await Task.Delay(250);
             _status.Text = "Ready. Discord Input Device = CABLE Output.";
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.Message, "TTS error");
+            MessageBox.Show(this, ex.Message, "TTS error");
             _status.Text = "TTS error.";
         }
         finally
         {
             _speaking = false;
             _speak.Enabled = true;
+            _loadPack.Enabled = _engine.SelectedIndex == 1;
         }
     }
 
-    private static byte[] SynthesizeChunk(string text, string? voiceName)
+    private static byte[] SynthesizeWindowsChunk(string text, string? voiceName)
     {
         using var synth = new SpeechSynthesizer();
         if (!string.IsNullOrWhiteSpace(voiceName)) synth.SelectVoice(voiceName);
