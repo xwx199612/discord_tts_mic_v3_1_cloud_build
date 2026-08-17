@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>discord_tts</AssemblyName>
     <RootNamespace>DiscordTtsMic</RootNamespace>
-    <Version>3.2.0</Version>
+    <Version>3.3.0</Version>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -17,5 +17,6 @@
   <ItemGroup>
     <PackageReference Include="NAudio" Version="2.2.1" />
     <PackageReference Include="System.Speech" Version="8.0.0" />
+    <PackageReference Include="org.k2fsa.sherpa.onnx" Version="1.13.4" />
   </ItemGroup>
 </Project>
