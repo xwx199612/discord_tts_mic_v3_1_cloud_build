@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>discord_tts</AssemblyName>
     <RootNamespace>DiscordTtsMic</RootNamespace>
-    <Version>3.3.0</Version>
+    <Version>3.4.0</Version>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
